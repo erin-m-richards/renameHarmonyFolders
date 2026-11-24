@@ -26,6 +26,7 @@ ______________________________________________________________________________
 
 ## Required packages (may work with lower, but has not been tested)
   - python 3.13 and dependencies
+  - pip 26.2 and dependencies
   - pandas 3.1 and dependencies
   - lxml 6.1 and dependencies
 
