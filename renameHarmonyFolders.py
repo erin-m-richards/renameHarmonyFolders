@@ -15,13 +15,22 @@ def main():
         root = tk.Tk()
         root.withdraw()
         print("\nNote: The selection window may be hidden behind other windows.\n")
+        print("\tSelect the 'hs' folder that contains your exported data.\n")
         hsFolder = filedialog.askdirectory(title="Select the 'hs' folder that contains your exported data.")
 
         # Make the start of the final data list.
         dataList = pd.DataFrame(columns=['FilePath', 'GUID', 'OrigPlateName', 'Time', 'NewPlateName'])
         nameList = []
 
-        print("Gathering plate names from metadata...")
+        # Create a dummy for the folders that have errors.
+        errorList = []
+
+        print("Gathering platenames from metadata...")
+        # Save printed details to a .txt file for investigation later.
+        outputFile = "RenamePhenixFolders_output_" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt"
+        sys.stdout = open(path.join(hsFolder, outputFile), 'w', encoding='utf-8')
+        print("Gathering platename metadata from:")
+
         # Get all the plate names from the .xml file for each GUID folder.
         for guidFolder in listdir(hsFolder): # For each guidFolder in the hs directory...
             # Get full folder path.
@@ -33,6 +42,7 @@ def main():
             xmlGUID = "-".join(xmlGUID)
 
             if path.isdir(guidFolderPath): # If that guidFolder is a folder...
+                print(f"\t{guidFolder}")
                 for file in listdir(guidFolderPath): # For each file in that folder...
                     if file == f"{xmlGUID}.xml": # If that file is the correct .xml file...
                         # Read the .xml file.
@@ -51,7 +61,7 @@ def main():
             uNameIdx = [i for i, x in enumerate(nameList) if x == uName]
 
             if len(uNameIdx) > 1: # If there are multiple plates with that plate name...
-                print(f"\n\tMultiple plates found with plate name {uName}.")
+                print(f"\n\tMultiple plates found with platename {uName}.")
                 print("\t\tAdjusting plate names to include time information...")
                 timeList = []
 
@@ -95,9 +105,11 @@ def main():
         # Save the output file with old and new plate names that will become the folder names.
         dataList.to_csv(path.join(hsFolder, outputPlateNames), index=False)
 
-        print("\nComplete!")
-        print(f"Proposed new folder names saved to {Path(path.join(hsFolder, outputPlateNames)).resolve()}.")
-        print("If you'd like, you can adjust the names now in the file and save it, BEFORE you select the file in the next step.\n")
+        # Go back to printing to the Terminal.
+        sys.stdout = sys.__stdout__
+
+        print(f"\nProposed new folder names saved to {Path(path.join(hsFolder, outputPlateNames)).resolve()}.")
+        print("\tIf you'd like, you can adjust the names now in the file in the 'NewPlateName' column and save the file, BEFORE you select the file in the next step.\n")
 
 
         ## PART TWO: Open that file (with any user changes) and rename or copy and rename the folders.
@@ -105,7 +117,8 @@ def main():
         root = tk.Tk()
         root.withdraw()
         print("\nNote: The selection window may be hidden behind other windows.\n")
-        plateNames = filedialog.askopenfilename(title="Select the .csv file with the plate names.")
+        print("\tSelect the .csv file with the platenames.\n")
+        plateNames = filedialog.askopenfilename(title="Select the .csv file with the platenames.")
 
         # Read the CSV file containing the plate names and file paths.
         dataList = pd.read_csv(plateNames)
@@ -155,6 +168,22 @@ def main():
 
         root.mainloop()
 
+        if renameChoice == "rename":
+            print("Renaming folders...")
+        elif renameChoice == "copy":
+            print("Copying and renaming folders...")
+        else:
+            print("Exiting program without renaming folders...")
+
+        # Save printed details to a .txt file for investigation later.
+        sys.stdout = open(path.join(hsFolder, outputFile), 'a', encoding='utf-8')
+        if renameChoice == "rename":
+            print("\nRenaming folders:")
+        elif renameChoice == "copy":
+            print("\nCopying and renaming folders:")
+        else:
+            print("Exiting program without renaming folders.")
+
         # Get the old and new folder paths.
         for folder in dataList.itertuples(index=False): # For each folder in the set...
             # Get the xml file path from the .csv file.
@@ -172,28 +201,40 @@ def main():
             NFNpath = Path(newFolderName).resolve()
             NFNpath_short = NFNpath.relative_to(Path(hsFolder).resolve())
 
+            print(f"\t{OFNpath} --> ~\\{NFNpath_short}")
+
             # Based on the user's choice, copy or rename each folder.
             if renameChoice == "copy": # If the user indicated 'copy'...
-                print(f"\tCopying folder {OFNpath} to ~\\{NFNpath_short}.")
                 # Create the new folder if it doesn't exist already.
                 NFNpath.mkdir(parents=True, exist_ok=True)
                 # Copy the files from the old folder to the new folder.
                 copytree(OFNpath, NFNpath, dirs_exist_ok=True)
             elif renameChoice == "rename": # If the user indicated 'rename'...
-                    print(f"\tRenaming folder from {OFNpath} to ~\\{NFNpath_short}.")
                     # Rename the old folder with the new folder name.
                     try:
                         rename(OFNpath, NFNpath)
                     except FileExistsError:
-                        print(f"\tError: Folder {NFNpath_short} already exists in this directory. Skipping this folder.")
+                        print(f"\t\tError: Folder {NFNpath_short} already exists in this directory. Skipping this folder.")
+                        errorList.append(OFNpath)
             else:
-                print("Exiting program without renaming folders.")
                 break
 
+        # Go back to printing to the Terminal.
+        sys.stdout = sys.__stdout__
+        
         print(f"\nFinished processing folders in {Path(hsFolder).resolve()}.\n")
 
+        if len(errorList) > 0:
+            print("\tThe following folders could not be renamed because a folder with that name already exists in the directory:")
+            for folder in errorList:
+                print(f"\t{folder}")
+        else:
+            print("\tAll folders were renamed successfully.")
+
+        print(f"\tDetails saved to {Path(path.join(hsFolder, outputFile)).resolve()}.")
+
     finally:
-        input("Press Enter to close this window...")
+        input("\nPress Enter to close this window...\n")
 
 if __name__ == "__main__":
     main()
