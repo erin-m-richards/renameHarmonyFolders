@@ -1,7 +1,7 @@
 # renameHarmonyFolders
 When using 'Write Archive' to export images from the Revvity Opera Phenix and Harmony 5.2/5.3, TIFs export in folders with GUID names rather than with user-given platenames.
 
-![alt text](<Screenshot 2026-11-24 123419.png>)
+<img width="405" height="471" alt="Screenshot 2026-11-24 123419" src="https://github.com/user-attachments/assets/4182d5ba-05ac-4639-9aef-2d2a0645b9e3" />
 
 The user-given platenames for these folders are in an .html file inside of each folder.
 
