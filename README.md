@@ -3,6 +3,8 @@ When using 'Write Archive' to export images from the Revvity Opera Phenix and Ha
 
 <img width="405" height="471" alt="Screenshot 2026-11-24 123419" src="https://github.com/user-attachments/assets/4182d5ba-05ac-4639-9aef-2d2a0645b9e3" />
 
+&emsp;
+
 The user-given platenames for these folders are in an .html file inside of each folder.
 
 &emsp;&emsp;hs\ → folder named for GUID\ → html file named for GUID
@@ -41,8 +43,3 @@ ______________________________________________________________________________
 7. (Run) A new pop-up window will ask if you'd like to rename the folders directly or if you'd like to rename copies of those folders.
 8. (Run) Any issues with folders will appear in the Terminal as a printed message.
 9. (Run) Close the Terminal.
-
-_After you run Steps 1-3 above_, you can also turn this script into its own .exe application on your own computer with:
-1. Download the [PyInstaller](https://pyinstaller.org/en/stable/) package with `pip install PyInstaller`.
-2. Then run `pyinstaller --clean --onefile --name renameHarmonyFolders path\to\renameHarmonyFolders.py`. It may take a while to compile.
-3. After it is complete, you can simply double-click the renameHarmonyFolders.exe file to run the program.
