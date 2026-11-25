@@ -23,6 +23,7 @@ def main():
         nameList = []
 
         # Create a dummy for the folders that have errors.
+        manualList = []
         errorList = []
 
         print("Gathering platenames from metadata...")
@@ -33,27 +34,34 @@ def main():
 
         # Get all the plate names from the .xml file for each GUID folder.
         for guidFolder in listdir(hsFolder): # For each guidFolder in the hs directory...
-            # Get full folder path.
-            guidFolderPath = path.join(hsFolder, guidFolder)
-            # Get just the GUID for that folder.
-            guid = guidFolderPath.split("\\")[-1]
-            # Get the name of the xml file in that GUID folder.
-            xmlGUID = guid.split("-")[0:-1]
-            xmlGUID = "-".join(xmlGUID)
-
-            if path.isdir(guidFolderPath): # If that guidFolder is a folder...
+            if path.isdir(path.join(hsFolder, guidFolder)): # If that guidFolder is a folder...
+                # Get full folder path.
+                guidFolderPath = path.join(hsFolder, guidFolder)
+                # Get just the GUID for that folder.
+                guid = guidFolderPath.split("\\")[-1]
+                # Get the name of the xml file in that GUID folder.
+                xmlGUID = guid.split("-")[0:-1]
+                xmlGUID = "-".join(xmlGUID)
                 print(f"\t{guidFolder}")
-                for file in listdir(guidFolderPath): # For each file in that folder...
-                    if file == f"{xmlGUID}.xml": # If that file is the correct .xml file...
-                        # Read the .xml file.
-                        df = pd.read_xml(path.join(guidFolderPath, file))
-                        # Get the user-defined plate name from the .xml file.
-                        plateName = df['InitialPlateName'][4]
-                        # Add the .xml file path, GUID, and original plate name to the data list.
-                        newRow = pd.DataFrame({'FilePath': path.join(guidFolderPath, file), 'GUID': guid, 'OrigPlateName': plateName}, index=[0])
-                        # Append each GUID folder to the final data list.
-                        dataList = pd.concat([dataList, newRow], ignore_index=True)
-                        nameList.append(plateName)
+                xmlGUIDfilename = xmlGUID + ".xml"
+                if path.isfile(path.join(guidFolderPath, xmlGUIDfilename)) == True: # If that .xml file exists...
+                    # Read the .xml file.
+                    df = pd.read_xml(path.join(guidFolderPath, xmlGUIDfilename))
+                    # Get the user-defined plate name from the .xml file.
+                    plateName = df['InitialPlateName'][4]
+                    # Add the .xml file path, GUID, and original plate name to the data list.
+                    newRow = pd.DataFrame({'FilePath': path.join(guidFolderPath, xmlGUIDfilename), 'GUID': guid, 'OrigPlateName': plateName}, index=[0])
+                    # Append each GUID folder to the final data list.
+                    dataList = pd.concat([dataList, newRow], ignore_index=True)
+                    nameList.append(plateName)
+                else: # If that .xml file is not in the folder...
+                    print(f"\t\tError: Metadata .xml file not found in this folder. User will need to input a platename for this folder manually.")
+                    # Add the .xml file path, GUID, and original plate name (none) to the data list.
+                    newRow = pd.DataFrame({'FilePath': path.join(guidFolderPath, xmlGUIDfilename), 'GUID': guid, 'OrigPlateName': None}, index=[0])
+                    # Append each GUID folder to the final data list.
+                    dataList = pd.concat([dataList, newRow], ignore_index=True)
+                    nameList.append(guid)
+                    manualList.append(guid)
 
         # Handle the cases from automation or when there are multiple plates with the same plate name...
         for u, uName in enumerate(list(set(nameList))): # For each unique plate name in the list...
@@ -93,12 +101,14 @@ def main():
                     dataList.at[int(uNameIdx[oldTimeIdx]), 'NewPlateName'] = newName
 
             else: # If it is a unique plate name...
-                # Get the GUID from the data list.
-                guid = dataList.iloc[u,1]
-                # Leave the time in the data list blank.
-                dataList.at[(uNameIdx)[0], 'Time'] = None
                 # Save the new name (the same as the original plate name) in the data list.
-                dataList.at[(uNameIdx)[0], 'NewPlateName'] = f"{uName}"
+                if uName in manualList: # If the .xml file was not found...
+                    dataList.at[(uNameIdx)[0], 'Time'] = None
+                    dataList.at[(uNameIdx)[0], 'NewPlateName'] = None
+                else:
+                    # Leave the time in the data list blank.
+                    dataList.at[(uNameIdx)[0], 'Time'] = None
+                    dataList.at[(uNameIdx)[0], 'NewPlateName'] = f"{uName}"
 
         # Generate output file name to show how the names will change.
         outputPlateNames = "RenamePhenixFolders_output_" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".csv"
@@ -109,7 +119,12 @@ def main():
         sys.stdout = sys.__stdout__
 
         print(f"\nProposed new folder names saved to {Path(path.join(hsFolder, outputPlateNames)).resolve()}.")
-        print("\tIf you'd like, you can adjust the names now in the file in the 'NewPlateName' column and save the file, BEFORE you select the file in the next step.\n")
+        if len(manualList) > 0:
+            print(f"\tYou need to input a name in the 'NewPlateName' column for the following folders or they will not be renamed:")
+            for manualName in manualList:
+                print(f"\t\t{manualName}")
+        else:
+            print("\tIf you'd like, you can adjust the names now in the file in the 'NewPlateName' column and save the file, BEFORE you select the file in the next step.\n")
 
 
         ## PART TWO: Open that file (with any user changes) and rename or copy and rename the folders.
@@ -121,7 +136,9 @@ def main():
         plateNames = filedialog.askopenfilename(title="Select the .csv file with the platenames.")
 
         # Read the CSV file containing the plate names and file paths.
-        dataList = pd.read_csv(plateNames)
+        dataList = pd.read_csv(plateNames, na_values=['', 'NaN', 'nan', 'None'], keep_default_na=True)
+        dataList = dataList.replace('', None)
+        dataList = dataList.where(pd.notnull(dataList), None)
 
         # Build a GUI and allow user to specify whether they want to rename the folder directly or copy and rename the folder.
         root = tk.Tk()
@@ -184,40 +201,46 @@ def main():
         else:
             print("Exiting program without renaming folders.")
 
+        print(dataList)
+
         # Get the old and new folder paths.
         for folder in dataList.itertuples(index=False): # For each folder in the set...
-            # Get the xml file path from the .csv file.
-            xmlPath = folder.FilePath
-            # Get the old folder path from the xml file path.
-            oldFolder = xmlPath.split('\\')[:-1]
-            oldFolderName = "\\".join(oldFolder)
-            # Get the new folder path from the old folder path and the new plate name from the .csv file.
-            newFolder = oldFolder[:-1]
-            newFolderName = "\\".join(newFolder)
-            newFolderName = path.join(newFolderName, folder.NewPlateName)
-
-            # Get the absolute paths for the old and new folders and fix any weirdness.
-            OFNpath = Path(oldFolderName).resolve()
-            NFNpath = Path(newFolderName).resolve()
-            NFNpath_short = NFNpath.relative_to(Path(hsFolder).resolve())
-
-            print(f"\t{OFNpath} --> ~\\{NFNpath_short}")
-
-            # Based on the user's choice, copy or rename each folder.
-            if renameChoice == "copy": # If the user indicated 'copy'...
-                # Create the new folder if it doesn't exist already.
-                NFNpath.mkdir(parents=True, exist_ok=True)
-                # Copy the files from the old folder to the new folder.
-                copytree(OFNpath, NFNpath, dirs_exist_ok=True)
-            elif renameChoice == "rename": # If the user indicated 'rename'...
-                    # Rename the old folder with the new folder name.
-                    try:
-                        rename(OFNpath, NFNpath)
-                    except FileExistsError:
-                        print(f"\t\tError: Folder {NFNpath_short} already exists in this directory. Skipping this folder.")
-                        errorList.append(OFNpath)
+            print(f"Folder: {folder}")
+            if folder.NewPlateName is None: # If the user did not input a new platename for this folder...
+                print(f"\tSkipping folder {folder} because no new platename was provided.")
             else:
-                break
+                # Get the xml file path from the .csv file.
+                xmlPath = folder.FilePath
+                # Get the old folder path from the xml file path.
+                oldFolder = xmlPath.split('\\')[:-1]
+                oldFolderName = "\\".join(oldFolder)
+                # Get the new folder path from the old folder path and the new plate name from the .csv file.
+                newFolder = oldFolder[:-1]
+                newFolderName = "\\".join(newFolder)
+                newFolderName = path.join(newFolderName, folder.NewPlateName)
+
+                # Get the absolute paths for the old and new folders and fix any weirdness.
+                OFNpath = Path(oldFolderName).resolve()
+                NFNpath = Path(newFolderName).resolve()
+                NFNpath_short = NFNpath.relative_to(Path(hsFolder).resolve())
+
+                print(f"\t{OFNpath} --> ~\\{NFNpath_short}")
+
+                # Based on the user's choice, copy or rename each folder.
+                if renameChoice == "copy": # If the user indicated 'copy'...
+                    # Create the new folder if it doesn't exist already.
+                    NFNpath.mkdir(parents=True, exist_ok=True)
+                    # Copy the files from the old folder to the new folder.
+                    copytree(OFNpath, NFNpath, dirs_exist_ok=True)
+                elif renameChoice == "rename": # If the user indicated 'rename'...
+                        # Rename the old folder with the new folder name.
+                        try:
+                            rename(OFNpath, NFNpath)
+                        except FileExistsError:
+                            print(f"\t\tError: Folder {NFNpath_short} already exists in this directory. Skipping this folder.")
+                            errorList.append(OFNpath)
+                else:
+                    break
 
         # Go back to printing to the Terminal.
         sys.stdout = sys.__stdout__
